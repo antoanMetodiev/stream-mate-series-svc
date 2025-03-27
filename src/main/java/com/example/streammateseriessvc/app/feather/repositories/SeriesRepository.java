@@ -1,6 +1,7 @@
 package com.example.streammateseriessvc.app.feather.repositories;
 
 import com.example.streammateseriessvc.app.feather.models.Series;
+import com.example.streammateseriessvc.app.feather.models.SeriesComment;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -34,4 +35,14 @@ public interface SeriesRepository extends JpaRepository<Series, UUID> {
 
     @Query(value = "SELECT id, title, poster_img_url, release_date FROM series WHERE LOWER(genres) LIKE LOWER(CONCAT('%', :genre, '%')) ORDER BY created_at DESC LIMIT :size OFFSET :offset", nativeQuery = true)
     List<Object[]> findByGenreNextTwentySeries(@Param("genre") String genre, @Param("size") int size, @Param("offset") int offset);
+
+
+    @Query(value =
+            "SELECT * FROM series_comments " +
+                    "WHERE series_id = :currentCinemaRecordId " +
+                    "ORDER BY created_at DESC " +
+                    "LIMIT 10 OFFSET :offset",
+            nativeQuery = true)
+    List<SeriesComment> getNext10Comments(@Param("offset") int offset,
+                                          @Param("currentCinemaRecordId") UUID currentCinemaRecordId);
 }

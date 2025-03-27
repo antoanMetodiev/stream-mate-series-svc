@@ -32,9 +32,14 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'com.google.code.gson:gson:2.8.9'
 
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testImplementation 'org.junit.jupiter:junit-jupiter:5.8.1'
+    // За тестове с Spring MVC и Mockito
+    testImplementation 'org.springframework.boot:spring-boot-starter-test' // Това включва и MockMvc, и Mockito
+    testImplementation 'org.mockito:mockito-core:4.8.1' // Ако искате по-нова версия на Mockito (ако не е включен в `spring-boot-starter-test`)
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.8.1'
+
 
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
 }

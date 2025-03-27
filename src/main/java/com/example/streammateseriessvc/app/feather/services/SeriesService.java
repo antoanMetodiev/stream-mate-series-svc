@@ -5,19 +5,22 @@ import com.example.streammateseriessvc.app.commonData.models.entities.Actor;
 import com.example.streammateseriessvc.app.commonData.models.enums.ImageType;
 import com.example.streammateseriessvc.app.commonData.repositories.ActorRepository;
 import com.example.streammateseriessvc.app.commonData.utils.UtilMethods;
+import com.example.streammateseriessvc.app.exception.CommentNotFoundException;
+import com.example.streammateseriessvc.app.exception.SeriesNotFoundException;
 import com.example.streammateseriessvc.app.feather.models.Episode;
 import com.example.streammateseriessvc.app.feather.models.Series;
+import com.example.streammateseriessvc.app.feather.models.SeriesComment;
 import com.example.streammateseriessvc.app.feather.models.SeriesImage;
+import com.example.streammateseriessvc.app.feather.repositories.SeriesCommentsRepository;
 import com.example.streammateseriessvc.app.feather.repositories.SeriesImageRepository;
 import com.example.streammateseriessvc.app.feather.repositories.SeriesRepository;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -46,6 +49,7 @@ public class SeriesService {
     private final SeriesRepository seriesRepository;
     private final ActorRepository actorRepository;
     private final SeriesImageRepository seriesImageRepository;
+    private final SeriesCommentsRepository seriesCommentsRepository;
 
     private final TransactionTemplate transactionTemplate;
     private final Executor asyncExecutor;
@@ -55,6 +59,7 @@ public class SeriesService {
                          ActorRepository actorRepository,
                          SeriesImageRepository seriesImageRepository,
                          HttpClient httpClient,
+                         SeriesCommentsRepository seriesCommentsRepository,
                          TransactionTemplate transactionTemplate,
                          Executor asyncExecutor) {
 
@@ -62,8 +67,130 @@ public class SeriesService {
         this.seriesRepository = seriesRepository;
         this.actorRepository = actorRepository;
         this.seriesImageRepository = seriesImageRepository;
+        this.seriesCommentsRepository = seriesCommentsRepository;
         this.transactionTemplate = transactionTemplate;
         this.asyncExecutor = asyncExecutor;
+    }
+
+    @Transactional
+    public void postComment(String authorUsername, String authorFullName,
+                            String authorImgURL, String commentText, double rating,
+                            String createdAt,
+                            String authorId,
+                            String movieId) {
+
+        UUID id = UUID.fromString(movieId);
+        Series series = this.seriesRepository.findById(id)
+                .orElseThrow(() -> new SeriesNotFoundException("Series is not found!"));
+
+        SeriesComment comment = new SeriesComment();
+        comment.setAuthorUsername(authorUsername);
+        comment.setAuthorFullName(authorFullName);
+        comment.setAuthorImgURL(authorImgURL);
+        comment.setCommentText(commentText);
+        comment.setRating(rating);
+        comment.setCreatedAt(createdAt);
+        comment.setSeries(series);
+        comment.setAuthorId(UUID.fromString(authorId));
+
+        series.getSeriesComments().add(comment);
+        this.seriesRepository.save(series);
+    }
+
+    public List<SeriesComment> getNext10Comments(int order, UUID currentCinemaRecordId) {
+        int offset = (order - 1) * 10;  // Преобразуване на order в offset
+        List<SeriesComment> next10Comments = this.seriesRepository.getNext10Comments(offset, currentCinemaRecordId);
+        return next10Comments;
+    }
+
+    @Transactional
+    public void deleteSeriesComment(String commentId, String seriesId) {
+        UUID currentSeriesId = UUID.fromString(seriesId);
+        UUID currentCommentId = UUID.fromString(commentId);
+
+        // Изтегляне на филма по ID
+        Series series = this.seriesRepository.findById(currentSeriesId)
+                .orElseThrow(() -> new SeriesNotFoundException("Series not found!"));
+
+        SeriesComment commentToDelete = series.getSeriesComments().stream()
+                .filter(comment -> comment.getId().equals(currentCommentId))
+                .findFirst()
+                .orElseThrow(() -> new CommentNotFoundException("Comment not found!"));
+
+        series.getSeriesComments().remove(commentToDelete);
+        this.seriesCommentsRepository.delete(commentToDelete);
+        this.seriesRepository.save(series);
+    }
+
+    @Async
+    public CompletableFuture<List<SeriesImage>> extractDetailsImages(JsonArray backdropsJsonAr, ImageType imageType, int limit) {
+        List<SeriesImage> backdropImages = new ArrayList<>();
+
+        int count = 0;
+        for (JsonElement jsonElement : backdropsJsonAr) {
+            SeriesImage image = new SeriesImage();
+
+            if (imageType.equals(ImageType.BACKDROP)) image.setImageType(ImageType.BACKDROP);
+            else image.setImageType(ImageType.POSTER);
+
+            backdropImages.add(image.setImageURL(jsonElement.getAsJsonObject().get("file_path")
+                    .getAsString()));
+
+            if (count++ == limit) break;
+        }
+
+        return CompletableFuture.completedFuture(backdropImages);
+    }
+
+    public List<CinemaRecordResponse> getEveryThirtySeries(Pageable pageable) {
+        List<Object[]> rawData = seriesRepository.getThirthySeriesRawData(pageable);
+        List<CinemaRecordResponse> dtos = rawData.stream().map(obj ->
+                new CinemaRecordResponse(
+                        (UUID) obj [0],
+                        (String) obj[1],  // title
+                        (String) obj[2],  // posterImgURL
+                        (String) obj[3]   // releaseDate
+                )
+        ).toList();
+
+        return dtos;
+    }
+
+    public long getAllSeriesCount() {
+        return this.seriesRepository.count();
+    }
+
+    public Series getConcreteSeriesDetails(UUID seriesId) {
+        return this.seriesRepository.findById(seriesId).orElseThrow();
+    }
+
+    public List<Series> getSeriesByTitle(String title) {
+        return this.seriesRepository.findByTitleOrSearchTagContainingIgnoreCase(title);
+    }
+
+    public long getSearchedSeriesCount(String title) {
+        return this.seriesRepository.findSeriesCountByTitleOrSearchTagContainingIgnoreCase(title);
+    }
+
+    public long findSeriesCountByGenre(String genres) {
+        return this.seriesRepository.findSeriesCountByGenre(genres);
+    }
+
+    public List<CinemaRecordResponse> getNextTwentySeriesByGenre(String genre, Pageable pageable) {
+        int size = pageable.getPageSize();  // Получаваме размера на страницата (напр. 20)
+        int offset = pageable.getPageNumber() * size;  // Пресмятаме OFFSET (page * size)
+
+        List<Object[]> seriesByGenres = this.seriesRepository.findByGenreNextTwentySeries(genre, size, offset);
+        List<CinemaRecordResponse> dtos = seriesByGenres.stream().map(obj ->
+                new CinemaRecordResponse(
+                        (UUID) obj[0],
+                        (String) obj[1],  // title
+                        (String) obj[2],  // posterImgURL
+                        (String) obj[3]   // releaseDate
+                )
+        ).toList();
+
+        return dtos;
     }
 
     @Async
@@ -167,25 +294,6 @@ public class SeriesService {
         }, asyncExecutor);
     }
 
-    @Async
-    public CompletableFuture<List<SeriesImage>> extractDetailsImages(JsonArray backdropsJsonAr, ImageType imageType, int limit) {
-        List<SeriesImage> backdropImages = new ArrayList<>();
-
-        int count = 0;
-        for (JsonElement jsonElement : backdropsJsonAr) {
-            SeriesImage image = new SeriesImage();
-
-            if (imageType.equals(ImageType.BACKDROP)) image.setImageType(ImageType.BACKDROP);
-            else image.setImageType(ImageType.POSTER);
-
-            backdropImages.add(image.setImageURL(jsonElement.getAsJsonObject().get("file_path")
-                    .getAsString()));
-
-            if (count++ == limit) break;
-        }
-
-        return CompletableFuture.completedFuture(backdropImages);
-    }
 
     @Async
     public CompletableFuture<Boolean> extractSeasonsAsync(String seriesID, Series series) {
@@ -326,56 +434,5 @@ public class SeriesService {
 
             return true;
         });
-    }
-
-    public List<CinemaRecordResponse> getEveryThirtySeries(Pageable pageable) {
-        List<Object[]> rawData = seriesRepository.getThirthySeriesRawData(pageable);
-        List<CinemaRecordResponse> dtos = rawData.stream().map(obj ->
-                new CinemaRecordResponse(
-                        (UUID) obj [0],
-                        (String) obj[1],  // title
-                        (String) obj[2],  // posterImgURL
-                        (String) obj[3]   // releaseDate
-                )
-        ).toList();
-
-        return dtos;
-    }
-
-    public long getAllSeriesCount() {
-        return this.seriesRepository.count();
-    }
-
-    public Series getConcreteSeriesDetails(UUID seriesId) {
-        return this.seriesRepository.findById(seriesId).orElseThrow();
-    }
-
-    public List<Series> getSeriesByTitle(String title) {
-        return this.seriesRepository.findByTitleOrSearchTagContainingIgnoreCase(title);
-    }
-
-    public long getSearchedSeriesCount(String title) {
-        return this.seriesRepository.findSeriesCountByTitleOrSearchTagContainingIgnoreCase(title);
-    }
-
-    public long findSeriesCountByGenre(String genres) {
-        return this.seriesRepository.findSeriesCountByGenre(genres);
-    }
-
-    public List<CinemaRecordResponse> getNextTwentySeriesByGenre(String genre, Pageable pageable) {
-        int size = pageable.getPageSize();  // Получаваме размера на страницата (напр. 20)
-        int offset = pageable.getPageNumber() * size;  // Пресмятаме OFFSET (page * size)
-
-        List<Object[]> seriesByGenres = this.seriesRepository.findByGenreNextTwentySeries(genre, size, offset);
-        List<CinemaRecordResponse> dtos = seriesByGenres.stream().map(obj ->
-                new CinemaRecordResponse(
-                        (UUID) obj[0],
-                        (String) obj[1],  // title
-                        (String) obj[2],  // posterImgURL
-                        (String) obj[3]   // releaseDate
-                )
-        ).toList();
-
-        return dtos;
     }
 }

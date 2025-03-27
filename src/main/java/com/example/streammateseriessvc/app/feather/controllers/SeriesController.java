@@ -1,11 +1,10 @@
 package com.example.streammateseriessvc.app.feather.controllers;
 
-import com.example.streammateseriessvc.app.commonData.models.dtos.CinemaRecRequestDto;
 import com.example.streammateseriessvc.app.commonData.models.dtos.CinemaRecordResponse;
 import com.example.streammateseriessvc.app.feather.models.Series;
+import com.example.streammateseriessvc.app.feather.models.SeriesComment;
 import com.example.streammateseriessvc.app.feather.services.SeriesService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.bind.annotation.*;
@@ -72,5 +71,33 @@ public class SeriesController {
     @PostMapping("/search-series")
     public void searchSeries(@RequestParam String title) throws IOException, InterruptedException {
         this.seriesService.searchForSeries(title);
+    }
+
+    @PostMapping("/post-series-comment")
+    public void postComment(@RequestParam String authorUsername,
+                            @RequestParam String authorFullName,
+                            @RequestParam String authorImgURL,
+                            @RequestParam String commentText,
+                            @RequestParam double rating,
+                            @RequestParam String createdAt,
+                            @RequestParam String authorId,
+                            @RequestParam String movieId) {
+
+        this.seriesService.postComment(authorUsername, authorFullName, authorImgURL,
+                commentText, rating, createdAt, authorId, movieId);
+    }
+
+    @DeleteMapping("/delete-series-comment")
+    public void deleteSeriesComment(@RequestParam String commentId,
+                                    @RequestParam String movieId) {
+
+        this.seriesService.deleteSeriesComment(commentId, movieId);
+    }
+
+    @GetMapping("/get-next-10-series-comments")
+    public List<SeriesComment> getNext10SeriesComments(@RequestParam int order,
+                                                       @RequestParam String currentCinemaRecordId) {
+
+        return this.seriesService.getNext10Comments(order, UUID.fromString(currentCinemaRecordId));
     }
 }

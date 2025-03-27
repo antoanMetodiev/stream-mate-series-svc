@@ -44,6 +44,10 @@ public class Series extends CinemaRecord {
     @JsonManagedReference
     private List<SeriesImage> imagesList = new ArrayList<>();
 
+    @OneToMany(mappedBy = "series", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference
+    private List<SeriesComment> seriesComments = new ArrayList<>();
+
     public void addAllEpisodes(List<Episode> allSeasonEpisodes) {
         allSeasonEpisodes.forEach(episode -> episode.setSeries(this));
         this.allEpisodes.addAll(allSeasonEpisodes);
