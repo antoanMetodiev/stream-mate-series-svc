@@ -38,11 +38,13 @@ public interface SeriesRepository extends JpaRepository<Series, UUID> {
 
 
     @Query(value =
-            "SELECT * FROM series_comments " +
+            "SELECT id, comment_text, author_username, author_full_name, author_img_url, " +
+                    "author_id, rating, created_at " +
+                    "FROM series_comments " +
                     "WHERE series_id = :currentCinemaRecordId " +
                     "ORDER BY created_at DESC " +
                     "LIMIT 10 OFFSET :offset",
             nativeQuery = true)
-    List<SeriesComment> getNext10Comments(@Param("offset") int offset,
-                                          @Param("currentCinemaRecordId") UUID currentCinemaRecordId);
+    List<Object[]> getNext10Comments(@Param("offset") int offset,
+                                     @Param("currentCinemaRecordId") UUID currentCinemaRecordId);
 }
