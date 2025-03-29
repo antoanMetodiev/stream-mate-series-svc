@@ -99,8 +99,26 @@ public class SeriesService {
 
     public List<SeriesComment> getNext10Comments(int order, UUID currentCinemaRecordId) {
         int offset = (order - 1) * 10;  // Преобразуване на order в offset
-        List<SeriesComment> next10Comments = this.seriesRepository.getNext10Comments(offset, currentCinemaRecordId);
-        return next10Comments;
+        List<Object[]> next10Comments = this.seriesRepository.getNext10Comments(offset, currentCinemaRecordId);
+
+        List<SeriesComment> seriesComments = new ArrayList<>();
+
+        for (Object[] comment : next10Comments) {
+            SeriesComment seriesComment = new SeriesComment();
+
+            seriesComment.setId((UUID) comment[0]);
+            seriesComment.setCommentText((String) comment[1]);
+            seriesComment.setAuthorUsername((String) comment[2]);
+            seriesComment.setAuthorFullName((String) comment[3]);
+            seriesComment.setAuthorImgURL((String) comment[4]);
+            seriesComment.setAuthorId((UUID) comment[5]);
+            seriesComment.setRating((Double) comment[6]);
+            seriesComment.setCreatedAt((String) comment[7]);
+
+            seriesComments.add(seriesComment);
+        }
+
+        return seriesComments;
     }
 
     @Transactional
